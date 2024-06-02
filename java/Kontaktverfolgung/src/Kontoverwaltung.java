@@ -8,20 +8,38 @@ import java.io.*;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
+/**
+ * Die Klasse Kontoverwaltung ist eine JavaFX-Anwendung zur Verwaltung von Bankkonten.
+ * Sie bietet Funktionen zum Erstellen, Löschen, Ändern und Anzeigen von Konten.
+ */
+
 public class Kontoverwaltung extends Application {
     private static final String DATEI_NAME = "konten.csv";
     private static List<Konto> kontenListe = new ArrayList<>();
     private static int kontonummerZaehler = 1000; // Startnummer für Kontonummern
 
+    /**
+     * Die main-Methode lädt die Konten und startet die Anwendung.
+     * @param args die Befehlszeilenargumente
+     */
     public static void main(String[] args) {
         ladeKonten();
         launch(args);
     }
 
+    /**
+     * Die Methode start initialisiert die Benutzeroberfläche der Anwendung.
+     * @param primaryStage das Hauptfenster der Anwendung
+     */
     @Override
     public void start(Stage primaryStage) {
+        // Code für die Initialisierung der Benutzeroberfläche
         primaryStage.setTitle("Kontoverwaltung");
 
+        /**
+         * Die Methode createKontoErstellenPane erstellt das Pane zum Erstellen von Konten.
+         * @return das Pane zum Erstellen von Konten
+         */
         TabPane tabPane = new TabPane();
 
         Tab tabErstellen = new Tab("Konto erstellen", createKontoErstellenPane());
@@ -42,6 +60,7 @@ public class Kontoverwaltung extends Application {
     }
 
     private Pane createKontoErstellenPane() {
+        // Code für die Erstellung des Pane zum Erstellen von Konten
         VBox vbox = new VBox();
         vbox.setSpacing(10);
         vbox.setPadding(new Insets(10));
@@ -80,7 +99,12 @@ public class Kontoverwaltung extends Application {
         return vbox;
     }
 
+    /**
+     * Die Methode createEinzahlenAuszahlenPane erstellt das Pane zum Ein- und Auszahlen von Geld.
+     * @return das Pane zum Ein- und Auszahlen von Geld
+     */
     private Pane createEinzahlenAuszahlenPane() {
+        // Code für die Erstellung des Pane zum Ein- und Auszahlen von Geld
         VBox vbox = new VBox();
         vbox.setSpacing(10);
         vbox.setPadding(new Insets(10));
@@ -126,6 +150,11 @@ public class Kontoverwaltung extends Application {
         return vbox;
     }
 
+    /**
+     * Die Methode findeKonto sucht ein Konto anhand seiner Kontonummer.
+     * @param kontonummer die Kontonummer des gesuchten Kontos
+     * @return das gefundene Konto oder null, wenn kein Konto gefunden wurde
+     */
     private Konto findeKonto(int kontonummer) {
         for (Konto konto : kontenListe) {
             if (konto.kontonummer == kontonummer) {
@@ -135,6 +164,11 @@ public class Kontoverwaltung extends Application {
         return null;
     }
 
+    /**
+     * Die Methode findeKontoMitIBAN sucht ein Konto anhand seiner IBAN.
+     * @param iban die IBAN des gesuchten Kontos
+     * @return das gefundene Konto oder null, wenn kein Konto gefunden wurde
+     */
     private Konto findeKontoMitIBAN(String iban) {
         for (Konto konto : kontenListe) {
             if (konto.getIBAN().equals(iban)) { // Stellen Sie sicher, dass Ihre Konto-Klasse eine getIBAN-Methode hat
@@ -144,6 +178,12 @@ public class Kontoverwaltung extends Application {
         return null; // Rückgabe null, wenn kein Konto mit der angegebenen IBAN gefunden wurde
     }
 
+    /**
+     * Die Methode umbuchen bucht Geld von einem Konto auf ein anderes.
+     * @param vonKontonummer die Kontonummer des Kontos, von dem das Geld abgebucht wird
+     * @param zuKontonummer die Kontonummer des Kontos, auf das das Geld gebucht wird
+     * @param betrag der zu buchende Betrag
+     */
     public void umbuchen(int vonKontonummer, int zuKontonummer, double betrag) {
         Konto vonKonto = findeKonto(vonKontonummer);
         Konto zuKonto = findeKonto(zuKontonummer);
@@ -162,6 +202,13 @@ public class Kontoverwaltung extends Application {
         zuKonto.einzahlen(betrag);
         speichereKonten();
     }
+
+    /**
+     * Die Methode umbuchenMitIBAN bucht Geld von einem Konto auf ein anderes, wobei die Konten anhand ihrer IBAN identifiziert werden.
+     * @param vonIBAN die IBAN des Kontos, von dem das Geld abgebucht wird
+     * @param zuIBAN die IBAN des Kontos, auf das das Geld gebucht wird
+     * @param betrag der zu buchende Betrag
+     */
     public void umbuchenMitIBAN(String vonIBAN, String zuIBAN, double betrag) {
         Konto vonKonto = findeKontoMitIBAN(vonIBAN);
         Konto zuKonto = findeKontoMitIBAN(zuIBAN);
@@ -397,6 +444,11 @@ public class Kontoverwaltung extends Application {
         return vbox;
     }
 
+    /**
+     * Die Methode showAlert zeigt einen Fehlerdialog an.
+     * @param title der Titel des Dialogs
+     * @param message die Nachricht des Dialogs
+     */
     private void showAlert(String title, String message) {
         Alert alert = new Alert(Alert.AlertType.ERROR);
         alert.setTitle(title);
@@ -405,12 +457,19 @@ public class Kontoverwaltung extends Application {
         alert.showAndWait();
     }
 
+    /**
+     * Die Methode generateIBAN generiert eine zufällige IBAN.
+     * @return die generierte IBAN
+     */
     private static String generateIBAN() {
         // This is a very basic implementation and might not be suitable for your needs.
         // You should replace this with your own IBAN generation logic.
         return "DE" + (new Random().nextInt(90000000) + 10000000) + "50010517";
     }
 
+    /**
+     * Die Methode ladeKonten lädt die Konten aus einer Datei.
+     */
     private static void ladeKonten() {
         try (BufferedReader br = new BufferedReader(new FileReader(DATEI_NAME))) {
             String line;
@@ -441,6 +500,9 @@ public class Kontoverwaltung extends Application {
         }
     }
 
+    /**
+     * Die Methode speichereKonten speichert die Konten in einer Datei.
+     */
     private static void speichereKonten() {
         try (BufferedWriter bw = new BufferedWriter(new FileWriter(DATEI_NAME))) {
             for (Konto konto : kontenListe) {
@@ -451,7 +513,9 @@ public class Kontoverwaltung extends Application {
         }
     }
 
-    // Konto Klasse und Unterklassen
+    /**
+     * Die Klasse Konto repräsentiert ein Bankkonto.
+     */
     abstract static class Konto {
         protected int kontonummer;
         protected String kontoinhaber;
