@@ -32,9 +32,11 @@ public class Kontoverwaltung extends Application {
         Tab tabDatenAendern = new Tab("Daten ändern", createDatenAendernPane());
         Tab tabUmbuchen = new Tab("Umbuchen", createUmbuchenPane());
         Tab tabSuchen = new Tab("Suchen", createSuchenPane());
-        tabPane.getTabs().addAll(tabErstellen, tabLoeschen, tabAendern, tabLesen, tabDatenAnsehen, tabDatenAendern, tabUmbuchen, tabSuchen);
+        Tab tabEinzahlenAuszahlen = new Tab("Einzahlen/Auszahlen", createEinzahlenAuszahlenPane());
+        Tab tabUmbuchenMitIBAN = new Tab("Umbuchen mit IBAN", createUmbuchenMitIBANPane());
+        tabPane.getTabs().addAll(tabErstellen, tabLoeschen, tabAendern, tabLesen, tabDatenAnsehen, tabDatenAendern, tabUmbuchen, tabSuchen, tabEinzahlenAuszahlen, tabUmbuchenMitIBAN);
 
-        Scene scene = new Scene(tabPane, 800, 600);
+        Scene scene = new Scene(tabPane, 950, 400);
         primaryStage.setScene(scene);
         primaryStage.show();
     }
@@ -59,9 +61,11 @@ public class Kontoverwaltung extends Application {
             Konto neuesKonto = null;
 
             if (kontoart.equals("Girokonto")) {
-                neuesKonto = new Girokonto(kontonummerZaehler++, kontoinhaber, saldo, anlegedatum);
+                String iban = generateIBAN(); // You need to implement this method to generate an IBAN
+                neuesKonto = new Girokonto(kontonummerZaehler++, kontoinhaber, saldo, anlegedatum, iban);
             } else if (kontoart.equals("Sparkonto")) {
-                neuesKonto = new Sparkonto(kontonummerZaehler++, kontoinhaber, saldo, anlegedatum);
+                String iban = generateIBAN(); // You need to implement this method to generate an IBAN
+                neuesKonto = new Sparkonto(kontonummerZaehler++, kontoinhaber, saldo, anlegedatum, iban);
             }
 
             kontenListe.add(neuesKonto);
@@ -76,43 +80,140 @@ public class Kontoverwaltung extends Application {
         return vbox;
     }
 
-        public void umbuchen(int vonKontonummer, int zuKontonummer, double betrag) {
-            Konto vonKonto = null;
-            Konto zuKonto = null;
+    private Pane createEinzahlenAuszahlenPane() {
+        VBox vbox = new VBox();
+        vbox.setSpacing(10);
+        vbox.setPadding(new Insets(10));
 
-            for (Konto konto : kontenListe) {
-                if (konto.kontonummer == vonKontonummer) {
-                    vonKonto = konto;
-                } else if (konto.kontonummer == zuKontonummer) {
-                    zuKonto = konto;
+        TextField kontonummerField = new TextField();
+        TextField betragField = new TextField();
+
+        Button einzahlenButton = new Button("Einzahlen");
+        Button auszahlenButton = new Button("Auszahlen");
+
+        einzahlenButton.setOnAction(e -> {
+            int kontonummer = Integer.parseInt(kontonummerField.getText());
+            double betrag = Double.parseDouble(betragField.getText());
+            Konto konto = findeKonto(kontonummer);
+
+            if (konto != null) {
+                if (!konto.einzahlen(betrag)) {
+                    showAlert("Fehler", "Betrag muss positiv sein.");
                 }
+                speichereKonten();
+            } else {
+                showAlert("Fehler", "Konto nicht gefunden.");
             }
+        });
 
-            if (vonKonto == null || zuKonto == null) {
-                showAlert("Fehler", "Eines oder beide Konten wurden nicht gefunden.");
-                return;
+        auszahlenButton.setOnAction(e -> {
+            int kontonummer = Integer.parseInt(kontonummerField.getText());
+            double betrag = Double.parseDouble(betragField.getText());
+            Konto konto = findeKonto(kontonummer);
+
+            if (konto != null) {
+                if (!konto.auszahlen(betrag)) {
+                    showAlert("Fehler", "Nicht genug Geld oder Betrag negativ.");
+                }
+                speichereKonten();
+            } else {
+                showAlert("Fehler", "Konto nicht gefunden.");
             }
+        });
 
-            if (vonKonto.saldo < betrag) {
-                showAlert("Fehler", "Nicht genug Geld auf dem Ausgangskonto.");
-                return;
+        vbox.getChildren().addAll(new Label("Kontonummer:"), kontonummerField, new Label("Betrag:"), betragField, einzahlenButton, auszahlenButton);
+
+        return vbox;
+    }
+
+    private Konto findeKonto(int kontonummer) {
+        for (Konto konto : kontenListe) {
+            if (konto.kontonummer == kontonummer) {
+                return konto;
             }
+        }
+        return null;
+    }
 
-            vonKonto.saldo -= betrag;
-            zuKonto.saldo += betrag;
-            speichereKonten();
+    private Konto findeKontoMitIBAN(String iban) {
+        for (Konto konto : kontenListe) {
+            if (konto.getIBAN().equals(iban)) { // Stellen Sie sicher, dass Ihre Konto-Klasse eine getIBAN-Methode hat
+                return konto;
+            }
+        }
+        return null; // Rückgabe null, wenn kein Konto mit der angegebenen IBAN gefunden wurde
+    }
+
+    public void umbuchen(int vonKontonummer, int zuKontonummer, double betrag) {
+        Konto vonKonto = findeKonto(vonKontonummer);
+        Konto zuKonto = findeKonto(zuKontonummer);
+
+        if (vonKonto == null || zuKonto == null) {
+            showAlert("Fehler", "Eines oder beide Konten wurden nicht gefunden.");
+            return;
         }
 
-        public List<Konto> suchen(String suchbegriff) {
-            List<Konto> gefundeneKonten = new ArrayList<>();
-
-            for (Konto konto : kontenListe) {
-                if (konto.kontoinhaber.contains(suchbegriff)) {
-                    gefundeneKonten.add(konto);
-                }
-            }
-            return gefundeneKonten;
+        if (vonKonto.getSaldo() < betrag) {
+            showAlert("Fehler", "Nicht genug Geld auf dem Ausgangskonto.");
+            return;
         }
+
+        vonKonto.auszahlen(betrag);
+        zuKonto.einzahlen(betrag);
+        speichereKonten();
+    }
+    public void umbuchenMitIBAN(String vonIBAN, String zuIBAN, double betrag) {
+        Konto vonKonto = findeKontoMitIBAN(vonIBAN);
+        Konto zuKonto = findeKontoMitIBAN(zuIBAN);
+
+        if (vonKonto == null || zuKonto == null) {
+            showAlert("Fehler", "Eines oder beide Konten wurden nicht gefunden.");
+            return;
+        }
+
+        if (vonKonto.getSaldo() < betrag) {
+            showAlert("Fehler", "Nicht genug Geld auf dem Ausgangskonto.");
+            return;
+        }
+
+        vonKonto.auszahlen(betrag);
+        zuKonto.einzahlen(betrag);
+        speichereKonten();
+    }
+
+    private Pane createUmbuchenMitIBANPane() {
+        VBox vbox = new VBox();
+        vbox.setSpacing(10);
+        vbox.setPadding(new Insets(10));
+
+        TextField vonIBANField = new TextField();
+        TextField zuIBANField = new TextField();
+        TextField betragField = new TextField();
+
+        Button umbuchenButton = new Button("Umbuchen");
+        umbuchenButton.setOnAction(e -> {
+            String vonIBAN = vonIBANField.getText();
+            String zuIBAN = zuIBANField.getText();
+            double betrag = Double.parseDouble(betragField.getText());
+
+            umbuchenMitIBAN(vonIBAN, zuIBAN, betrag);
+        });
+
+        vbox.getChildren().addAll(new Label("Von IBAN:"), vonIBANField, new Label("Zu IBAN:"), zuIBANField, new Label("Betrag:"), betragField, umbuchenButton);
+
+        return vbox;
+    }
+
+    public List<Konto> suchen(String suchbegriff) {
+        List<Konto> gefundeneKonten = new ArrayList<>();
+
+        for (Konto konto : kontenListe) {
+            if (konto.getKontoinhaber().contains(suchbegriff)) {
+                gefundeneKonten.add(konto);
+            }
+        }
+        return gefundeneKonten;
+    }
 
     private Pane createKontoLoeschenPane() {
         VBox vbox = new VBox();
@@ -124,13 +225,7 @@ public class Kontoverwaltung extends Application {
         Button loeschenButton = new Button("Konto löschen");
         loeschenButton.setOnAction(e -> {
             int kontonummer = Integer.parseInt(kontonummerField.getText());
-            Konto zuLoeschen = null;
-            for (Konto konto : kontenListe) {
-                if (konto.kontonummer == kontonummer) {
-                    zuLoeschen = konto;
-                    break;
-                }
-            }
+            Konto zuLoeschen = findeKonto(kontonummer);
 
             if (zuLoeschen != null) {
                 kontenListe.remove(zuLoeschen);
@@ -158,21 +253,12 @@ public class Kontoverwaltung extends Application {
         Button aendernButton = new Button("Konto ändern");
         aendernButton.setOnAction(e -> {
             int kontonummer = Integer.parseInt(kontonummerField.getText());
-            Konto zuAendern = null;
-            for (Konto konto : kontenListe) {
-                if (konto.kontonummer == kontonummer) {
-                    zuAendern = konto;
-                    break;
-                }
-            }
+            Konto zuAendern = findeKonto(kontonummer);
 
             if (zuAendern != null) {
-                zuAendern.kontoinhaber = kontoinhaberField.getText();
-                zuAendern.saldo = Double.parseDouble(saldoField.getText());
+                zuAendern.setKontoinhaber(kontoinhaberField.getText());
+                zuAendern.setSaldo(Double.parseDouble(saldoField.getText()));
                 speichereKonten();
-                kontonummerField.clear();
-                kontoinhaberField.clear();
-                saldoField.clear();
             } else {
                 showAlert("Fehler", "Konto nicht gefunden.");
             }
@@ -188,17 +274,19 @@ public class Kontoverwaltung extends Application {
         vbox.setSpacing(10);
         vbox.setPadding(new Insets(10));
 
-        TextArea kontenTextArea = new TextArea();
-        kontenTextArea.setEditable(false);
-        Button ladenButton = new Button("Konten laden");
-        ladenButton.setOnAction(e -> {
-            kontenTextArea.clear();
+        TextArea textArea = new TextArea();
+        textArea.setEditable(false);
+
+        Button anzeigenButton = new Button("Konten anzeigen");
+        anzeigenButton.setOnAction(e -> {
+            StringBuilder sb = new StringBuilder();
             for (Konto konto : kontenListe) {
-                kontenTextArea.appendText(konto + "\n");
+                sb.append(konto).append("\n");
             }
+            textArea.setText(sb.toString());
         });
 
-        vbox.getChildren().addAll(kontenTextArea, ladenButton);
+        vbox.getChildren().addAll(anzeigenButton, textArea);
 
         return vbox;
     }
@@ -209,51 +297,53 @@ public class Kontoverwaltung extends Application {
         vbox.setPadding(new Insets(10));
 
         TextField kontonummerField = new TextField();
-        TextArea datenTextArea = new TextArea();
-        datenTextArea.setEditable(false);
+        TextArea textArea = new TextArea();
+        textArea.setEditable(false);
 
-        Button ansehenButton = new Button("Daten ansehen");
-        ansehenButton.setOnAction(e -> {
-            int kontonummer = Integer.parseInt(kontonummerField.getText());
-            Konto konto = null;
-            for (Konto k : kontenListe) {
-                if (k.kontonummer == kontonummer) {
-                    konto = k;
-                    break;
-                }
+        Button anzeigenButton = new Button("Daten anzeigen");
+        anzeigenButton.setOnAction(e -> {
+            String kontonummerText = kontonummerField.getText();
+            if (kontonummerText.isEmpty()) {
+                showAlert("Fehler", "Bitte geben Sie eine Kontonummer ein.");
+                return;
             }
+            int kontonummer = Integer.parseInt(kontonummerText);
+            Konto konto = findeKonto(kontonummer);
+            if (konto == null) {
+                showAlert("Fehler", "Konto nicht gefunden.");
+                return;
+            }
+            textArea.setText(konto.toString());
+        });
+
+        vbox.getChildren().addAll(new Label("Kontonummer:"), kontonummerField, anzeigenButton, textArea);
+
+        return vbox;
+    }
+    private Pane createDatenAendernPane() {
+        VBox vbox = new VBox();
+        vbox.setSpacing(10);
+        vbox.setPadding(new Insets(10));
+
+        TextField kontonummerField = new TextField();
+        TextField kontoinhaberField = new TextField();
+        TextField saldoField = new TextField();
+
+        Button aendernButton = new Button("Daten ändern");
+        aendernButton.setOnAction(e -> {
+            int kontonummer = Integer.parseInt(kontonummerField.getText());
+            Konto konto = findeKonto(kontonummer);
 
             if (konto != null) {
-                datenTextArea.setText("Kontoinhaber: " + konto.kontoinhaber + "\nSaldo: " + konto.saldo + "\nKontoart: " + konto.kontoart + "\nAnlegedatum: " + konto.anlegedatum);
+                konto.setKontoinhaber(kontoinhaberField.getText());
+                konto.setSaldo(Double.parseDouble(saldoField.getText()));
+                speichereKonten();
             } else {
                 showAlert("Fehler", "Konto nicht gefunden.");
             }
         });
 
-        vbox.getChildren().addAll(new Label("Kontonummer:"), kontonummerField, ansehenButton, datenTextArea);
-
-        return vbox;
-    }
-
-    private Pane createSuchenPane() {
-        VBox vbox = new VBox();
-        vbox.setSpacing(10);
-        vbox.setPadding(new Insets(10));
-
-        TextField suchbegriffField = new TextField();
-        Button suchenButton = new Button("Suchen");
-        TextArea ergebnisArea = new TextArea();
-
-        suchenButton.setOnAction(e -> {
-            String suchbegriff = suchbegriffField.getText();
-            List<Konto> ergebnisse = suchen(suchbegriff);
-            ergebnisArea.clear();
-            for (Konto konto : ergebnisse) {
-                ergebnisArea.appendText(konto.toString() + "\n");
-            }
-        });
-
-        vbox.getChildren().addAll(new Label("Suchbegriff:"), suchbegriffField, suchenButton, ergebnisArea);
+        vbox.getChildren().addAll(new Label("Kontonummer:"), kontonummerField, new Label("Neuer Kontoinhaber:"), kontoinhaberField, new Label("Neuer Saldo:"), saldoField, aendernButton);
 
         return vbox;
     }
@@ -266,12 +356,13 @@ public class Kontoverwaltung extends Application {
         TextField vonKontonummerField = new TextField();
         TextField zuKontonummerField = new TextField();
         TextField betragField = new TextField();
-        Button umbuchenButton = new Button("Umbuchen");
 
+        Button umbuchenButton = new Button("Umbuchen");
         umbuchenButton.setOnAction(e -> {
             int vonKontonummer = Integer.parseInt(vonKontonummerField.getText());
             int zuKontonummer = Integer.parseInt(zuKontonummerField.getText());
             double betrag = Double.parseDouble(betragField.getText());
+
             umbuchen(vonKontonummer, zuKontonummer, betrag);
         });
 
@@ -280,60 +371,70 @@ public class Kontoverwaltung extends Application {
         return vbox;
     }
 
-    private Pane createDatenAendernPane() {
+    private Pane createSuchenPane() {
         VBox vbox = new VBox();
         vbox.setSpacing(10);
         vbox.setPadding(new Insets(10));
 
-        TextField kontonummerField = new TextField();
-        TextField neuerKontoinhaberField = new TextField();
+        TextField suchbegriffField = new TextField();
+        TextArea textArea = new TextArea();
+        textArea.setEditable(false);
 
-        Button aendernButton = new Button("Daten ändern");
-        aendernButton.setOnAction(e -> {
-            int kontonummer = Integer.parseInt(kontonummerField.getText());
-            Konto konto = null;
-            for (Konto k : kontenListe) {
-                if (k.kontonummer == kontonummer) {
-                    konto = k;
-                    break;
-                }
-            }
+        Button suchenButton = new Button("Suchen");
+        suchenButton.setOnAction(e -> {
+            String suchbegriff = suchbegriffField.getText();
+            List<Konto> gefundeneKonten = suchen(suchbegriff);
 
-            if (konto != null) {
-                konto.kontoinhaber = neuerKontoinhaberField.getText();
-                speichereKonten();
-                kontonummerField.clear();
-                neuerKontoinhaberField.clear();
-            } else {
-                showAlert("Fehler", "Konto nicht gefunden.");
+            StringBuilder sb = new StringBuilder();
+            for (Konto konto : gefundeneKonten) {
+                sb.append(konto).append("\n");
             }
+            textArea.setText(sb.toString());
         });
 
-        vbox.getChildren().addAll(new Label("Kontonummer:"), kontonummerField, new Label("Neuer Kontoinhaber:"), neuerKontoinhaberField, aendernButton);
+        vbox.getChildren().addAll(new Label("Suchbegriff:"), suchbegriffField, suchenButton, textArea);
 
         return vbox;
+    }
+
+    private void showAlert(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+
+    private static String generateIBAN() {
+        // This is a very basic implementation and might not be suitable for your needs.
+        // You should replace this with your own IBAN generation logic.
+        return "DE" + (new Random().nextInt(90000000) + 10000000) + "50010517";
     }
 
     private static void ladeKonten() {
         try (BufferedReader br = new BufferedReader(new FileReader(DATEI_NAME))) {
             String line;
             while ((line = br.readLine()) != null) {
-                String[] daten = line.split(",");
+                String[] daten = line.split(";");
+                if (daten.length < 6) {
+                    System.out.println("Skipping line with less than 6 values: " + line);
+                    continue;
+                }
                 int kontonummer = Integer.parseInt(daten[0]);
                 String kontoinhaber = daten[1];
                 double saldo = Double.parseDouble(daten[2]);
                 String kontoart = daten[3];
                 String anlegedatum = daten[4];
+                String iban = daten[5];
 
                 Konto konto;
                 if (kontoart.equals("Girokonto")) {
-                    konto = new Girokonto(kontonummer, kontoinhaber, saldo, anlegedatum);
+                    konto = new Girokonto(kontonummer, kontoinhaber, saldo, anlegedatum, iban);
                 } else {
-                    konto = new Sparkonto(kontonummer, kontoinhaber, saldo, anlegedatum);
+                    konto = new Sparkonto(kontonummer, kontoinhaber, saldo, anlegedatum, iban);
                 }
 
                 kontenListe.add(konto);
-                kontonummerZaehler = Math.max(kontonummerZaehler, kontonummer + 1);
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -343,51 +444,139 @@ public class Kontoverwaltung extends Application {
     private static void speichereKonten() {
         try (BufferedWriter bw = new BufferedWriter(new FileWriter(DATEI_NAME))) {
             for (Konto konto : kontenListe) {
-                bw.write(konto.toString());
-                bw.newLine();
+                bw.write(konto.toCSV() + "\n");
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    private void showAlert(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
+    // Konto Klasse und Unterklassen
+    abstract static class Konto {
+        protected int kontonummer;
+        protected String kontoinhaber;
+        protected double saldo;
+        protected String anlegedatum;
+        protected String iban; // Hinzufügen des iban Attributs
+
+        public Konto(int kontonummer, String kontoinhaber, double saldo, String anlegedatum, String iban) {
+            this.kontonummer = kontonummer;
+            this.kontoinhaber = kontoinhaber;
+            this.saldo = saldo;
+            this.anlegedatum = anlegedatum;
+            this.iban = iban; // Initialisieren des iban Attributs
+        }
+
+        public String getIBAN() { // Hinzufügen der getIBAN Methode
+            return iban;
+        }
+
+        public int getKontonummer() {
+            return kontonummer;
+        }
+
+        public String getKontoinhaber() {
+            return kontoinhaber;
+        }
+
+        public void setKontoinhaber(String kontoinhaber) {
+            this.kontoinhaber = kontoinhaber;
+        }
+
+        public double getSaldo() {
+            return saldo;
+        }
+
+        public void setSaldo(double saldo) {
+            this.saldo = saldo;
+        }
+
+        private static Konto findeKonto(int kontonummer) {
+            for (Konto konto : kontenListe) {
+                if (konto.kontonummer == kontonummer) {
+                    return konto;
+                }
+            }
+            return null;
+        }
+
+        private static void showAlert(String title, String message) {
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle(title);
+            alert.setHeaderText(null);
+            alert.setContentText(message);
+            alert.showAndWait();
+        }
+        public boolean einzahlen(double betrag) {
+            if (betrag > 0) {
+                saldo += betrag;
+                return true;
+            }
+            return false;
+        }
+
+        public boolean auszahlen(double betrag) {
+            if (betrag > 0 && saldo >= betrag) {
+                saldo -= betrag;
+                return true;
+            }
+            return false;
+        }
+
+        public abstract String toCSV();
+
+        @Override
+        public String toString() {
+            return "Konto{" +
+                    "kontonummer=" + kontonummer +
+                    ", kontoinhaber='" + kontoinhaber + '\'' +
+                    ", saldo=" + saldo +
+                    ", anlegedatum='" + anlegedatum + '\'' +
+                    '}';
+        }
     }
-}
 
-class Konto {
-    protected int kontonummer;
-    protected String kontoinhaber;
-    protected double saldo;
-    protected String kontoart;
-    protected String anlegedatum;
+    static class Girokonto extends Konto {
+        public Girokonto(int kontonummer, String kontoinhaber, double saldo, String anlegedatum, String iban) {
+            super(kontonummer, kontoinhaber, saldo, anlegedatum, iban);
+        }
 
-    public Konto(int kontonummer, String kontoinhaber, double saldo, String kontoart, String anlegedatum) {
-        this.kontonummer = kontonummer;
-        this.kontoinhaber = kontoinhaber;
-        this.saldo = saldo;
-        this.kontoart = kontoart;
-        this.anlegedatum = anlegedatum;
+        @Override
+        public String toCSV() {
+            return kontonummer + ";" + kontoinhaber + ";" + saldo + ";Girokonto;" + anlegedatum + ";" + iban;
+        }
+
+        @Override
+        public String toString() {
+            return "Girokonto{" +
+                    "kontonummer=" + kontonummer +
+                    ", kontoinhaber='" + kontoinhaber + '\'' +
+                    ", saldo=" + saldo +
+                    ", anlegedatum='" + anlegedatum + '\'' +
+                    ", iban='" + iban + '\'' +
+                    '}';
+        }
     }
 
-    public String toString() {
-        return kontonummer + "," + kontoinhaber + "," + saldo + "," + kontoart + "," + anlegedatum;
-    }
-}
+    static class Sparkonto extends Konto {
+        public Sparkonto(int kontonummer, String kontoinhaber, double saldo, String anlegedatum, String iban) {
+            super(kontonummer, kontoinhaber, saldo, anlegedatum, iban);
+        }
 
-class Girokonto extends Konto {
-    public Girokonto(int kontonummer, String kontoinhaber, double saldo, String anlegedatum) {
-        super(kontonummer, kontoinhaber, saldo, "Girokonto", anlegedatum);
-    }
-}
+        @Override
+        public String toCSV() {
+            return kontonummer + ";" + kontoinhaber + ";" + saldo + ";Sparkonto;" + anlegedatum + ";" + iban;
+        }
 
-class Sparkonto extends Konto {
-    public Sparkonto(int kontonummer, String kontoinhaber, double saldo, String anlegedatum) {
-        super(kontonummer, kontoinhaber, saldo, "Sparkonto", anlegedatum);
+        @Override
+        public String toString() {
+            return "Sparkonto{" +
+                    "kontonummer=" + kontonummer +
+                    ", kontoinhaber='" + kontoinhaber + '\'' +
+                    ", saldo=" + saldo +
+                    ", anlegedatum='" + anlegedatum + '\'' +
+                    ", iban='" + iban + '\'' +
+                    '}';
+        }
     }
 }
